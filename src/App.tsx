@@ -1,22 +1,40 @@
-import {Button, Box, Heading, Stack} from '@primer/react'
-import {MarkGithubIcon} from '@primer/octicons-react'
-import MyActionMenu from './myActionMenu'
 import './App.css'
+import React, {useState} from "react";
+import WarningBanner from "./components/warningBanner.tsx";
+import FileUploadComponent from "./components/fileUploadComponent.tsx";
+import TPSHeatmap from "./components/heatmap.tsx";
 
 export default function App() {
-  return ( 
-  <>
-    
-      <Heading class="mb-2" as="h2">
-        <MarkGithubIcon size={64} /> Primer + Vite + TS
-      </Heading>
-      <Stack direction="vertical">
-        <Button onClick={() => alert('Hello, Primer!')}>Click me</Button>
-        <MyActionMenu />
-      </Stack>
-      
-    
-      
-    </>
-  )
+    let [showWarning, setShowWarning] = useState(true)
+    let [fileUploaded, setFileUploaded] = useState(false)
+    let [fileContent, fileContentSet] = useState<File>(new File([], ""));
+
+    function setFileContent(file: File) {
+        console.log("Setting file content in App: " + file.name);
+        fileContentSet(file);
+    }
+
+    function resetAll() {
+        setFileUploaded(false);
+        fileContentSet(new File([], ""));
+    }
+
+    // Show warning banner on initial load
+    if (showWarning) {
+        return (
+            <WarningBanner toggleBannerFunction={ () => setShowWarning(!showWarning)}/>
+        )
+    }
+
+    if (!fileUploaded){
+        return (
+            <FileUploadComponent toggleBannerFunction={
+                () => setFileUploaded(!fileUploaded)} setFileContentFunction={setFileContent}
+                />
+        )
+    }
+    console.log("From App: " + fileContent.name);
+    return (
+        <TPSHeatmap file={fileContent} resetFileFunction={resetAll}/>
+    )
 }
