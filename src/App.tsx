@@ -1,17 +1,18 @@
 import './App.css'
-import React, {useState} from "react";
+import { useState } from "react";
 import WarningBanner from "./components/warningBanner.tsx";
 import FileUploadComponent from "./components/fileUploadComponent.tsx";
 import TPSHeatmap from "./components/heatmap.tsx";
 
 export default function App() {
-    let [showWarning, setShowWarning] = useState(true)
-    let [fileUploaded, setFileUploaded] = useState(false)
-    let [fileContent, fileContentSet] = useState<File>(new File([], ""));
+    const [showWarning, setShowWarning] = useState(true)
+    const [fileUploaded, setFileUploaded] = useState(false)
+    const [fileContent, fileContentSet] = useState<File>(new File([], ""));
 
     function setFileContent(file: File) {
         console.log("Setting file content in App: " + file.name);
         fileContentSet(file);
+        setFileUploaded(true);
     }
 
     function resetAll() {

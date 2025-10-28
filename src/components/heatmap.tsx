@@ -1,6 +1,26 @@
 import {Box, Button, Heading, Text} from '@primer/react';
 import { useState, useEffect, useRef } from 'react';
 
+// Types
+interface TimePoint {
+    index: number;
+    timestamp: string;
+    tps: number;
+    players: string[];
+}
+
+interface PlayerStat {
+    name: string;
+    tpsValues: number[];
+    count: number;
+}
+
+interface PlayerScore {
+    name: string;
+    avgTPS: number;
+    count: number;
+}
+
 // Define the props interface
 interface Props {
     file: File | null; // Accept a File object or null
@@ -9,24 +29,77 @@ interface Props {
 
 function TPSHeatmap({ file, resetFileFunction }: Props) {
     // Reference to the canvas element
-    const canvasRef = useRef(null);
-    // Reference to the hidden file input
+    const canvasRef = useRef<HTMLCanvasElement | null>(null);
     // State to store time series data
-    const [timeSeriesData, setTimeSeriesData] = useState([]);
+    const [timeSeriesData, setTimeSeriesData] = useState<TimePoint[]>([]);
     // State to store player scores
-    const [playerScores, setPlayerScores] = useState([]);
+    const [playerScores, setPlayerScores] = useState<PlayerScore[]>([]);
     // State to track if we're loading the file
-    const [isLoading, setIsLoading] = useState(false);
+    const [isLoading, setIsLoading] = useState<boolean>(false);
     // State to track any errors
-    const [error, setError] = useState(null);
+    const [error, setError] = useState<string | null>(null);
     // State to store hover info (which point is being hovered)
-    const [hoverInfo, setHoverInfo] = useState(null);
+    const [hoverInfo, setHoverInfo] = useState<TimePoint | null>(null);
     // State to store mouse position for tooltip
-    const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
+    const [mousePos, setMousePos] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
 
-
-
-
+    const renderTooltip = (info: TimePoint) => (
+        <Box
+            sx={{
+                position: 'fixed',
+                left: mousePos.x + 15,
+                top: mousePos.y + 15,
+                backgroundColor: 'canvas.default',
+                border: '2px solid',
+                borderColor: 'border.default',
+                borderRadius: 2,
+                p: 2,
+                boxShadow: '0 8px 24px rgba(0,0,0,0.12)',
+                minWidth: 200,
+                maxWidth: 300,
+                zIndex: 1000,
+                pointerEvents: 'none'
+            }}
+        >
+            <Text sx={{ fontWeight: 'bold', fontSize: 12, color: 'fg.muted', mb: 1 }}>
+                {info.timestamp}
+            </Text>
+            <Box sx={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 2,
+                mb: 2,
+                pb: 2,
+                borderBottom: '1px solid',
+                borderColor: 'border.default'
+            }}>
+                <Text sx={{ fontSize: 14, fontWeight: 'bold' }}>TPS:</Text>
+                <Box sx={{
+                    px: 2,
+                    py: 1,
+                    borderRadius: 2,
+                    bg: getTpsColor(info.tps),
+                    fontWeight: 'bold',
+                    fontSize: 16
+                }}>
+                    {info.tps.toFixed(2)}
+                </Box>
+            </Box>
+            <Text sx={{ fontWeight: 'bold', fontSize: 12, mb: 1 }}>
+                Players Online ({info.players.length}):
+            </Text>
+            <Box sx={{ maxHeight: 200, overflowY: 'auto', fontSize: 12 }}>
+                {info.players.map((player: string, index: number) => (
+                    <Text
+                        key={index}
+                        sx={{ display: 'block', py: 0.5, px: 1, borderRadius: 1, bg: index % 2 === 0 ? 'canvas.subtle' : 'transparent' }}
+                    >
+                        {player}
+                    </Text>
+                ))}
+            </Box>
+        </Box>
+    );
 
     useEffect(() => {
         // If no file is provided, clear data and return
@@ -52,16 +125,15 @@ function TPSHeatmap({ file, resetFileFunction }: Props) {
                 const dataLines = lines.slice(1);
 
                 // Array to store time series points
-                const tsData = [];
-                // Object to track each player's TPS stats
-                const playerStats = {};
+                const tsData: TimePoint[] = [];
+                const playerStats: Record<string, PlayerStat> = {};
 
                 // Process each line of data
                 dataLines.forEach((line, index) => {
                     const parts = line.split(',');
                     const timestamp = parts[0]; // Keep timestamp as string
                     const tps = parseFloat(parts[1]); // Convert TPS string to number
-                    const players = parts[2].split(';'); // Split players by semicolon
+                    const players = parts[2] ? parts[2].split(';') : []; // Split players by semicolon
 
                     // Add to time series data
                     tsData.push({
@@ -72,14 +144,10 @@ function TPSHeatmap({ file, resetFileFunction }: Props) {
                     });
 
                     // For each player in this timestamp
-                    players.forEach(player => {
+                    players.forEach((player: string) => {
                         // If we haven't seen this player before, create their entry
                         if (!playerStats[player]) {
-                            playerStats[player] = {
-                                name: player,
-                                tpsValues: [],
-                                count: 0
-                            };
+                            playerStats[player] = { name: player, tpsValues: [], count: 0 };
                         }
                         // Add this TPS value to their list
                         playerStats[player].tpsValues.push(tps);
@@ -87,15 +155,9 @@ function TPSHeatmap({ file, resetFileFunction }: Props) {
                     });
                 });
 
-                // Calculate average TPS for each player
-                const scores = Object.values(playerStats).map(player => {
-                    // Sum all TPS values and divide by count to get average
-                    const avgTPS = player.tpsValues.reduce((sum, val) => sum + val, 0) / player.count;
-                    return {
-                        name: player.name,
-                        avgTPS: avgTPS,
-                        count: player.count
-                    };
+                const scores: PlayerScore[] = (Object.values(playerStats) as PlayerStat[]).map((player: PlayerStat) => {
+                    const avgTPS = player.tpsValues.reduce((sum: number, val: number) => sum + val, 0) / Math.max(player.count, 1);
+                    return { name: player.name, avgTPS, count: player.count };
                 });
 
                 // Sort players by average TPS (lowest first = worst performers)
@@ -104,9 +166,10 @@ function TPSHeatmap({ file, resetFileFunction }: Props) {
                 setTimeSeriesData(tsData);
                 setPlayerScores(scores);
                 setIsLoading(false);
-            } catch (err) {
+            } catch (err: unknown) {
                 // If there's an error reading or parsing the file
-                setError(err.message || 'Failed to parse file');
+                const message = err instanceof Error ? err.message : 'Failed to parse file';
+                setError(message);
                 setIsLoading(false);
             }
         };
@@ -117,11 +180,11 @@ function TPSHeatmap({ file, resetFileFunction }: Props) {
 
     // Helper function to get color based on TPS value
     // Red = bad (0 TPS), Yellow = medium, Green = good (20 TPS)
-    const getTpsColor = (tps) => {
+    const getTpsColor = (tps: number): string => {
         // Normalize TPS from 0-20 range to 0-1 range
         const normalized = Math.max(0, Math.min(1, tps / 20));
 
-        let r, g, b;
+        let r: number, g: number, b: number;
         if (normalized < 0.5) {
             // Red to Yellow (0.0 to 0.5)
             // At 0: full red (255, 0, 0)
@@ -142,10 +205,9 @@ function TPSHeatmap({ file, resetFileFunction }: Props) {
     };
 
     // Handler for mouse movement over canvas
-    const handleMouseMove = (e) => {
+    const handleMouseMove = (e: React.MouseEvent<HTMLCanvasElement>): void => {
         if (!canvasRef.current || timeSeriesData.length === 0) return;
-
-        const canvas = canvasRef.current;
+        const canvas = canvasRef.current as HTMLCanvasElement;
         const rect = canvas.getBoundingClientRect(); // Get canvas position on screen
 
         // Calculate mouse position relative to canvas
@@ -164,19 +226,19 @@ function TPSHeatmap({ file, resetFileFunction }: Props) {
         const graphHeight = canvas.height - marginTop - marginBottom;
 
         // Helper function to convert data index to X pixel position
-        const indexToX = (index) => {
-            const normalized = index / (timeSeriesData.length - 1);
+        const indexToX = (index: number): number => {
+            const normalized = index / Math.max(timeSeriesData.length - 1, 1);
             return marginLeft + (normalized * graphWidth);
         };
 
         // Helper function to convert TPS value to Y pixel position
-        const tpsToY = (tps) => {
-            const normalized = (tps - 0) / (20 - 0);
+        const tpsToY = (tps: number): number => {
+            const normalized = (tps - 0) / 20; // 0..1
             return marginTop + (normalized * graphHeight);
         };
 
         // Check each data point to see if mouse is near it
-        let foundPoint = null;
+        let foundPoint: TimePoint | null = null;
         const hoverRadius = 8; // How close mouse needs to be (in pixels)
 
         for (let i = 0; i < timeSeriesData.length; i++) {
@@ -201,16 +263,16 @@ function TPSHeatmap({ file, resetFileFunction }: Props) {
     };
 
     // Handler for when mouse leaves the canvas
-    const handleMouseLeave = () => {
+    const handleMouseLeave = (): void => {
         setHoverInfo(null); // Clear hover info
     };
 
     useEffect(() => {
         // Draw the graph when data is ready
         if (timeSeriesData.length === 0 || !canvasRef.current) return;
-
-        const canvas = canvasRef.current;
-        const ctx = canvas.getContext('2d'); // Get drawing context
+        const canvas = canvasRef.current as HTMLCanvasElement;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return;
 
         // Set canvas size
         const width = canvas.width;
@@ -234,15 +296,15 @@ function TPSHeatmap({ file, resetFileFunction }: Props) {
         const maxTPS = 20;
 
         // Helper function to convert TPS value to Y pixel position
-        const tpsToY = (tps) => {
+        const tpsToY = (tps: number): number => {
             // Map TPS range [0, 20] to pixel range [marginTop, marginTop + graphHeight]
             const normalized = (tps - minTPS) / (maxTPS - minTPS); // 0 to 1
             return marginTop + (normalized * graphHeight);
         };
 
         // Helper function to convert data index to X pixel position
-        const indexToX = (index) => {
-            const normalized = index / (timeSeriesData.length - 1); // 0 to 1
+        const indexToX = (index: number): number => {
+            const normalized = index / Math.max(timeSeriesData.length - 1, 1); // 0 to 1
             return marginLeft + (normalized * graphWidth);
         };
 
@@ -308,8 +370,8 @@ function TPSHeatmap({ file, resetFileFunction }: Props) {
         // Draw X-axis labels
         ctx.textAlign = 'center';
         ctx.fillStyle = '#333';
-        const firstTime = timeSeriesData[0].timestamp.split(' ')[1]; // Get time part
-        const lastTime = timeSeriesData[timeSeriesData.length - 1].timestamp.split(' ')[1];
+        const firstTime = timeSeriesData[0].timestamp.split(' ')[1] ?? timeSeriesData[0].timestamp; // Time part fallback
+        const lastTime = timeSeriesData[timeSeriesData.length - 1].timestamp.split(' ')[1] ?? timeSeriesData[timeSeriesData.length - 1].timestamp;
         ctx.fillText(firstTime, marginLeft, marginTop + graphHeight + 20);
         ctx.fillText(lastTime, marginLeft + graphWidth, marginTop + graphHeight + 20);
 
@@ -355,8 +417,6 @@ function TPSHeatmap({ file, resetFileFunction }: Props) {
 
     return (
         <Box sx={{ mt:10,p: 4 }}>
-
-
             {/* Header with button on far left */}
             <Box sx={{
                 display: 'flex',
@@ -365,7 +425,6 @@ function TPSHeatmap({ file, resetFileFunction }: Props) {
                 mt: 50,
                 mb: 2
             }}>
-
                 <Heading sx={{ ml: 3, mb: 0 }}>TPS Performance Analysis</Heading>
                 <Button variant="primary" sx={{ ml: 'auto' }} onClick={resetFileFunction}>Upload a new file</Button>
             </Box>
@@ -488,93 +547,21 @@ function TPSHeatmap({ file, resetFileFunction }: Props) {
                         />
 
                         {/* Tooltip that appears on hover */}
-                        {hoverInfo && (
-                            <Box
-                                sx={{
-                                    position: 'fixed', // Fixed position relative to viewport
-                                    left: mousePos.x + 15, // Offset from mouse cursor
-                                    top: mousePos.y + 15,
-                                    backgroundColor: 'canvas.default',
-                                    border: '2px solid',
-                                    borderColor: 'border.default',
-                                    borderRadius: 2,
-                                    p: 2,
-                                    boxShadow: '0 8px 24px rgba(0,0,0,0.12)', // Add shadow for depth
-                                    minWidth: 200,
-                                    maxWidth: 300,
-                                    zIndex: 1000, // Make sure it appears on top
-                                    pointerEvents: 'none' // Don't interfere with mouse events
-                                }}
-                            >
-                                {/* Timestamp */}
-                                <Text sx={{ fontWeight: 'bold', fontSize: 12, color: 'fg.muted', mb: 1 }}>
-                                    {hoverInfo.timestamp}
-                                </Text>
-
-                                {/* TPS value with color coding */}
-                                <Box sx={{
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    gap: 2,
-                                    mb: 2,
-                                    pb: 2,
-                                    borderBottom: '1px solid',
-                                    borderColor: 'border.default'
-                                }}>
-                                    <Text sx={{ fontSize: 14, fontWeight: 'bold' }}>TPS:</Text>
-                                    <Box sx={{
-                                        px: 2,
-                                        py: 1,
-                                        borderRadius: 2,
-                                        bg: getTpsColor(hoverInfo.tps),
-                                        fontWeight: 'bold',
-                                        fontSize: 16
-                                    }}>
-                                        {hoverInfo.tps.toFixed(2)}
-                                    </Box>
-                                </Box>
-
-                                {/* Player list */}
-                                <Text sx={{ fontWeight: 'bold', fontSize: 12, mb: 1 }}>
-                                    Players Online ({hoverInfo.players.length}):
-                                </Text>
-                                <Box sx={{
-                                    maxHeight: 200, // Limit height for many players
-                                    overflowY: 'auto', // Add scrollbar if needed
-                                    fontSize: 12
-                                }}>
-                                    {hoverInfo.players.map((player, index) => (
-                                        <Text
-                                            key={index}
-                                            sx={{
-                                                display: 'block',
-                                                py: 0.5,
-                                                px: 1,
-                                                borderRadius: 1,
-                                                // Alternate background colors for readability
-                                                bg: index % 2 === 0 ? 'canvas.subtle' : 'transparent'
-                                            }}
-                                        >
-                                            {player}
-                                        </Text>
-                                    ))}
-                                </Box>
-                            </Box>
-                        )}
+                        {hoverInfo ? renderTooltip(hoverInfo) : null}
                     </Box>
 
                     {/* Player rankings */}
                     <Box sx={{ mt: 4, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 3 }}>
                         {/* Worst performers */}
                         <Box>
-                            <Heading as="h3" sx={{ mb: 2, fontSize: 18 }}>
+                            <Heading as="h2" sx={{ mb: 2, fontSize: 18 }}>
                                 ⚠️ Players Associated with Low TPS
                             </Heading>
                             <Text sx={{ mb: 2, fontSize: 12, color: 'fg.muted' }}>
                                 Players who were online during the lowest average TPS periods
                             </Text>
                             <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                                {playerScores.slice(0, 5).map((player, index) => (
+                                {playerScores.slice(0, 5).map((player: PlayerScore, index: number) => (
                                     <Box
                                         key={player.name}
                                         sx={{
@@ -596,13 +583,7 @@ function TPSHeatmap({ file, resetFileFunction }: Props) {
                                                 {player.count} samples
                                             </Text>
                                         </Box>
-                                        <Box sx={{
-                                            px: 2,
-                                            py: 1,
-                                            borderRadius: 2,
-                                            bg: getTpsColor(player.avgTPS),
-                                            fontWeight: 'bold'
-                                        }}>
+                                        <Box sx={{ px: 2, py: 1, borderRadius: 2, bg: getTpsColor(player.avgTPS), fontWeight: 'bold' }}>
                                             {player.avgTPS.toFixed(2)} TPS
                                         </Box>
                                     </Box>
@@ -612,14 +593,14 @@ function TPSHeatmap({ file, resetFileFunction }: Props) {
 
                         {/* Best performers */}
                         <Box>
-                            <Heading as="h3" sx={{ mb: 2, fontSize: 18 }}>
+                            <Heading as="h2" sx={{ mb: 2, fontSize: 18 }}>
                                 ✅ Players Associated with High TPS
                             </Heading>
                             <Text sx={{ mb: 2, fontSize: 12, color: 'fg.muted' }}>
                                 Players who were online during the highest average TPS periods
                             </Text>
                             <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                                {playerScores.slice().reverse().slice(0, 5).map((player, index) => (
+                                {playerScores.slice().reverse().slice(0, 5).map((player: PlayerScore, index: number) => (
                                     <Box
                                         key={player.name}
                                         sx={{
@@ -641,13 +622,7 @@ function TPSHeatmap({ file, resetFileFunction }: Props) {
                                                 {player.count} samples
                                             </Text>
                                         </Box>
-                                        <Box sx={{
-                                            px: 2,
-                                            py: 1,
-                                            borderRadius: 2,
-                                            bg: getTpsColor(player.avgTPS),
-                                            fontWeight: 'bold'
-                                        }}>
+                                        <Box sx={{ px: 2, py: 1, borderRadius: 2, bg: getTpsColor(player.avgTPS), fontWeight: 'bold' }}>
                                             {player.avgTPS.toFixed(2)} TPS
                                         </Box>
                                     </Box>

@@ -40,7 +40,7 @@ function FileUpload({toggleBannerFunction, setFileContentFunction}: Props) {
         }
     };
 
-    // @ts-ignore
+
     return (
         <Box
             sx={{
@@ -87,7 +87,7 @@ function FileUpload({toggleBannerFunction, setFileContentFunction}: Props) {
                     transition: 'all 0.2s'  // Smooth color transition
                 }}
             >
-                <FileCodeIcon size={24} style={{color: 'var(--fgColor-muted)'}}/>
+                <FileCodeIcon size={24}/>
                 [ File Upload Component Placeholder ]
             </Box>
             <Box sx={{
